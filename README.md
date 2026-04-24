@@ -7,7 +7,6 @@ A PWA for quickly updating stock on your Nostr NIP-99 classified listings (kind 
 - Sign in with a NIP-07 browser extension, nsec, or bunker
 - Tap product images to add or remove stock in bulk
 - Publishes updated events with the **same `d` tag** — relays replace the prior version automatically
-- Edit full listing details: title, summary, description, price, location, category, stock, specs, and image
 - Installable PWA (service worker, offline shell cache, home-screen icon)
 
 This app does **not** create new listings — it only edits ones you already have.
