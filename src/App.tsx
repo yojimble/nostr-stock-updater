@@ -38,7 +38,7 @@ const queryClient = new QueryClient({
 
 const defaultConfig: AppConfig = {
   theme: "light",
-  relayUrls: ["wss://relay.damus.io", "wss://relay.plebeian.market", "wss://nos.lol", ""],
+  relayUrls: ["wss://relay.damus.io", "wss://relay.plebeian.market", "wss://nos.lol"],
 };
 
 const presetRelays = [

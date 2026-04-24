@@ -14,7 +14,7 @@ export function useUserListings() {
     queryFn: async ({ signal }) => {
       const events = await nostr.query(
         [{ kinds: [30402], authors: [user!.pubkey], limit: 500 }],
-        { signal: AbortSignal.any([signal, AbortSignal.timeout(6000)]) },
+        { signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) },
       );
 
       // Relays should already dedupe parameterized replaceable events by d-tag,
