@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { LoginArea } from '@/components/auth/LoginArea';
+import { NavTabs } from '@/components/NavTabs';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useUserListings } from '@/hooks/useUserListings';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
@@ -53,6 +54,7 @@ export default function ListingsPage() {
   if (!user) {
     return (
       <div className="w-full max-w-md mx-auto px-4 py-12 text-center space-y-6">
+        <NavTabs />
         <div>
           <Tag className="mx-auto h-10 w-10 text-muted-foreground" />
           <h1 className="mt-4 text-2xl font-semibold">Nostr Stock Updater</h1>
@@ -110,6 +112,8 @@ export default function ListingsPage() {
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 pb-32 space-y-5">
+      <NavTabs />
+
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">Inventory</h1>
         <div className="flex items-center gap-2">
