@@ -1,14 +1,19 @@
 // NOTE: This file is stable and usually should not be modified.
 // It is important that all functionality in this file is preserved, and should only be modified if explicitly requested.
 
-import React, { useState, useEffect } from 'react';
-import { Shield, AlertTriangle, Cloud } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Shield, AlertTriangle, Cloud, QrCode, Loader2, RotateCcw } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { useNostr } from '@nostrify/react';
+import { nip19 } from 'nostr-tools';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useLoginActions } from '@/hooks/useLoginActions';
+import { useAppContext } from '@/hooks/useAppContext';
+import { createNostrConnectSession, waitForNostrConnectAck, type NostrConnectSession } from '@/lib/nostrConnect';
 import { cn } from '@/lib/utils';
 
 interface LoginDialogProps {
@@ -42,6 +47,13 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
     extension?: string;
   }>({});
   const login = useLoginActions();
+  const { nostr } = useNostr();
+  const { config } = useAppContext();
+
+  const [qrStatus, setQrStatus] = useState<'idle' | 'waiting' | 'connected' | 'error'>('idle');
+  const [qrSession, setQrSession] = useState<NostrConnectSession | null>(null);
+  const [qrError, setQrError] = useState('');
+  const qrAbortRef = useRef<AbortController | null>(null);
 
   // Some NIP-07 extensions (Alby, nos2x-fox, etc.) inject `window.nostr`
   // asynchronously after the document loads. Poll briefly when the dialog
@@ -63,6 +75,12 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
       setIsLoading(false);
       setBunkerUri('');
       setErrors({});
+      setQrStatus('idle');
+      setQrSession(null);
+      setQrError('');
+    } else {
+      qrAbortRef.current?.abort();
+      qrAbortRef.current = null;
     }
   }, [isOpen]);
 
@@ -122,6 +140,49 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
     }
   };
 
+  const startQrSession = () => {
+    qrAbortRef.current?.abort();
+
+    const relay = config.relayUrls.filter(Boolean)[0] ?? 'wss://relay.damus.io';
+    const { session, clientSecretKey } = createNostrConnectSession(relay, 'Nostr Stock Updater');
+
+    setQrSession(session);
+    setQrStatus('waiting');
+    setQrError('');
+
+    const abort = new AbortController();
+    qrAbortRef.current = abort;
+    const timeout = setTimeout(() => abort.abort(), 3 * 60 * 1000);
+
+    waitForNostrConnectAck(nostr, clientSecretKey, session, abort.signal)
+      .then((remotePubkey) => {
+        clearTimeout(timeout);
+        if (qrAbortRef.current !== abort) return;
+        const nsec = nip19.nsecEncode(clientSecretKey);
+        login.nostrConnect(remotePubkey, remotePubkey, nsec, [relay]);
+        setQrStatus('connected');
+        onLogin();
+        onClose();
+      })
+      .catch((err) => {
+        clearTimeout(timeout);
+        if (qrAbortRef.current !== abort) return;
+        setQrStatus('error');
+        setQrError(err instanceof Error ? err.message : 'Failed to connect');
+      });
+  };
+
+  const handleTabChange = (value: string) => {
+    if (value === 'qr') {
+      if (qrStatus === 'idle') startQrSession();
+    } else {
+      qrAbortRef.current?.abort();
+      qrAbortRef.current = null;
+      setQrStatus('idle');
+      setQrSession(null);
+    }
+  };
+
   const defaultTab = hasExtension ? 'extension' : 'bunker';
 
   return (
@@ -135,8 +196,8 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
             </DialogDescription>
         </DialogHeader>
         <div className='px-6 pt-2 pb-4 space-y-4 overflow-y-auto flex-1'>
-          <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-muted/80 rounded-lg mb-4">
+          <Tabs defaultValue={defaultTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 bg-muted/80 rounded-lg mb-4">
               <TabsTrigger value="extension" className="flex items-center gap-2">
                 <Shield className="w-4 h-4" />
                 <span>Extension</span>
@@ -144,6 +205,10 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
               <TabsTrigger value="bunker" className="flex items-center gap-2">
                 <Cloud className="w-4 h-4" />
                 <span>Bunker</span>
+              </TabsTrigger>
+              <TabsTrigger value="qr" className="flex items-center gap-2">
+                <QrCode className="w-4 h-4" />
+                <span>Amber</span>
               </TabsTrigger>
             </TabsList>
             <TabsContent value='extension' className='space-y-3 bg-muted'>
@@ -201,6 +266,47 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ isOpen, onClose, onLogin, onS
                 >
                   {isLoading ? 'Connecting...' : 'Login with Bunker'}
                 </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value='qr' className='space-y-3 bg-muted'>
+              {qrStatus === 'error' && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{qrError}</AlertDescription>
+                </Alert>
+              )}
+              <div className='text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-800 space-y-3'>
+                <p className='text-sm text-gray-600 dark:text-gray-300'>
+                  Scan with Amber (or another Nostr Connect signer)
+                </p>
+
+                {qrSession && (qrStatus === 'waiting' || qrStatus === 'connected') && (
+                  <>
+                    <div className="flex justify-center">
+                      <div className="bg-white p-3 rounded-lg">
+                        <QRCodeSVG value={qrSession.uri} size={200} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                      {qrStatus === 'waiting' ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Waiting for approval…
+                        </>
+                      ) : (
+                        'Connected!'
+                      )}
+                    </p>
+                  </>
+                )}
+
+                {(qrStatus === 'error' || qrStatus === 'idle') && (
+                  <Button className='w-full rounded-full py-4' onClick={startQrSession}>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    {qrStatus === 'error' ? 'Try again' : 'Generate QR code'}
+                  </Button>
+                )}
               </div>
             </TabsContent>
           </Tabs>

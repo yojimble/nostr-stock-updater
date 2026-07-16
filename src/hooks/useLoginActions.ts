@@ -20,6 +20,12 @@ export function useLoginActions() {
       addLogin(login);
       setLogin(login.id);
     },
+    // Login from a completed client-initiated "nostrconnect://" pairing (e.g. Amber via QR)
+    nostrConnect(pubkey: string, bunkerPubkey: string, clientNsec: `nsec1${string}`, relays: string[]): void {
+      const login = new NLogin('bunker', pubkey, { bunkerPubkey, clientNsec, relays });
+      addLogin(login);
+      setLogin(login.id);
+    },
     // Login with a NIP-07 browser extension
     async extension(): Promise<void> {
       const login = await NLogin.fromExtension();
