@@ -15,9 +15,9 @@ export default defineConfig(() => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "icon-192.png", "icon-512.png", "icon-maskable-512.png"],
       manifest: {
-        name: "Nostr Stock Updater",
-        short_name: "Stock Updater",
-        description: "Quickly update stock on your Nostr classified listings.",
+        name: "Nostr POS & Stock Updater",
+        short_name: "Nostr POS",
+        description: "Manage stock on your Nostr classified listings, and sell in person with a Lightning point-of-sale and calculator.",
         start_url: "/",
         scope: "/",
         display: "standalone",
