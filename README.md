@@ -28,6 +28,22 @@ A PWA for quickly updating stock on your Nostr NIP-99 classified listings (kind 
 - Automatically detects payment via LUD-21 `verify`, where supported, or lets you confirm manually ("I've been paid")
 - WebLN wallets (browser extensions) can pay directly from the same device
 
+#### Auto-detected payment support
+
+Whether a sale is confirmed automatically depends on the lightning address (`lud16`) set on the **seller's** Nostr profile, not on the buyer's wallet. Auto-detect requires the seller's provider to support LUD-21 `verify`:
+
+| Provider | Auto-detects payment? |
+| --- | --- |
+| [Coinos](https://coinos.io) | ✅ Yes |
+| [LNbits](https://lnbits.com) | ✅ Yes |
+| [BTCPay Server](https://btcpayserver.org) | ✅ Yes |
+| [Blink](https://blink.sv) | ✅ Yes |
+| [Alby](https://getalby.com) | ✅ Yes |
+| [Wallet of Satoshi](https://www.walletofsatoshi.com) | ❌ No (manual confirm only) |
+| Strike | ❌ No (manual confirm only) |
+
+If your provider isn't listed, request an invoice from `https://<your-domain>/.well-known/lnurlp/<name>`, call its `callback` with an `amount`, and check whether the response includes a `verify` URL. Without one, the app falls back to a manual "I've been paid" button.
+
 ## Built with
 
 - [React 18](https://react.dev/) + [Vite](https://vitejs.dev/)

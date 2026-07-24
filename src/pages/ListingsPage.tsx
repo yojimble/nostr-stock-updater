@@ -31,6 +31,30 @@ function currentQty(ev: NostrEvent): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/**
+ * Replaces the stock/quantity tag in place rather than removing it and
+ * appending a new one at the end — that reorders every tag after it, which
+ * makes some signer permission UIs show a confusing positional diff (e.g.
+ * reporting the tag that slid into stock's old slot as if it changed).
+ */
+function withUpdatedStock(tags: string[][], newQty: number): string[][] {
+  const stockTag = ['stock', String(newQty)];
+  let replaced = false;
+  const next = tags.reduce<string[][]>((acc, tag) => {
+    if (tag[0] === 'stock' || tag[0] === 'quantity') {
+      if (!replaced) {
+        acc.push(stockTag);
+        replaced = true;
+      }
+      return acc;
+    }
+    acc.push(tag);
+    return acc;
+  }, []);
+  if (!replaced) next.push(stockTag);
+  return next;
+}
+
 export default function ListingsPage() {
   const { user } = useCurrentUser();
   const { data: listings, isLoading, isError, refetch } = useUserListings();
@@ -92,9 +116,7 @@ export default function ListingsPage() {
       const d = tagValue(ev.tags, 'd')!;
       const delta = pending[d] ?? 0;
       const newQty = Math.max(0, currentQty(ev) + delta);
-      const newTags = ev.tags
-        .filter(([t]) => t !== 'stock' && t !== 'quantity')
-        .concat([['stock', String(newQty)]]);
+      const newTags = withUpdatedStock(ev.tags, newQty);
       try {
         await publishEvent({ kind: 30402, content: ev.content, tags: newTags });
         ok++;

@@ -62,6 +62,30 @@ function currentQty(ev: NostrEvent): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/**
+ * Replaces the stock/quantity tag in place rather than removing it and
+ * appending a new one at the end — that reorders every tag after it, which
+ * makes some signer permission UIs show a confusing positional diff (e.g.
+ * reporting the tag that slid into stock's old slot as if it changed).
+ */
+function withUpdatedStock(tags: string[][], newQty: number): string[][] {
+  const stockTag = ['stock', String(newQty)];
+  let replaced = false;
+  const next = tags.reduce<string[][]>((acc, tag) => {
+    if (tag[0] === 'stock' || tag[0] === 'quantity') {
+      if (!replaced) {
+        acc.push(stockTag);
+        replaced = true;
+      }
+      return acc;
+    }
+    acc.push(tag);
+    return acc;
+  }, []);
+  if (!replaced) next.push(stockTag);
+  return next;
+}
+
 interface CartLine {
   d: string;
   title: string;
@@ -70,6 +94,8 @@ interface CartLine {
   currency: string;
   managed: boolean;
   stock: number;
+  /** The exact listing event as it was when added to the cart, used to publish the stock update at checkout. */
+  sourceEvent: NostrEvent;
 }
 
 export default function PosPage() {
@@ -191,7 +217,7 @@ export default function PosPage() {
       }
       return {
         ...prev,
-        [d]: { d, title, price, currency, managed, stock, qty: nextQty },
+        [d]: { d, title, price, currency, managed, stock, qty: nextQty, sourceEvent: ev },
       };
     });
   };
@@ -231,16 +257,15 @@ export default function PosPage() {
     try {
       let ok = 0;
       let failed = 0;
+      const updated: NostrEvent[] = [];
       for (const line of lines) {
         if (!line.managed) continue;
-        const ev = listings?.find((e) => tagValue(e.tags, 'd') === line.d);
-        if (!ev) continue;
+        const ev = line.sourceEvent;
         const newQty = Math.max(0, currentQty(ev) - line.qty);
-        const newTags = ev.tags
-          .filter(([t]) => t !== 'stock' && t !== 'quantity')
-          .concat([['stock', String(newQty)]]);
+        const newTags = withUpdatedStock(ev.tags, newQty);
         try {
-          await publishEvent({ kind: 30402, content: ev.content, tags: newTags });
+          const published = await publishEvent({ kind: 30402, content: ev.content, tags: newTags });
+          updated.push(published);
           ok++;
         } catch (err) {
           console.error('inventory update failed for', line.d, err);
@@ -248,8 +273,20 @@ export default function PosPage() {
         }
       }
       toast.success('Payment received — order complete.');
-      if (ok) toast.success(`Inventory updated for ${ok} item${ok === 1 ? '' : 's'}.`);
       if (failed) toast.error(`${failed} item${failed === 1 ? '' : 's'} failed to update inventory.`);
+
+      // Patch the cache with the events we just published so the UI reflects the
+      // new stock immediately, rather than waiting on a relay refetch to catch up
+      // (relays are eventually consistent and can briefly return the stale event).
+      if (updated.length > 0 && user) {
+        const byD = new Map(updated.map((e) => [tagValue(e.tags, 'd'), e]));
+        queryClient.setQueryData<NostrEvent[]>(['nip99-listings', user.pubkey], (old) =>
+          old?.map((e) => {
+            const d = tagValue(e.tags, 'd');
+            return d && byD.has(d) ? byD.get(d)! : e;
+          }),
+        );
+      }
       await queryClient.invalidateQueries({ queryKey: ['nip99-listings'] });
       clearCart();
     } finally {
