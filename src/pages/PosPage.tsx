@@ -255,7 +255,6 @@ export default function PosPage() {
     if (charging) return;
     setCharging(true);
     try {
-      let ok = 0;
       let failed = 0;
       const updated: NostrEvent[] = [];
       for (const line of lines) {
@@ -266,7 +265,6 @@ export default function PosPage() {
         try {
           const published = await publishEvent({ kind: 30402, content: ev.content, tags: newTags });
           updated.push(published);
-          ok++;
         } catch (err) {
           console.error('inventory update failed for', line.d, err);
           failed++;
